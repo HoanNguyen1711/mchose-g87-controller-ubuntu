@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=MCHOSE G87
+Comment=Chỉnh đèn và xem pin bàn phím MCHOSE
+Exec=mchose gui
+Icon=input-keyboard
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=keyboard;rgb;mchose;
+StartupNotify=true

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+dist/
+# personal lighting backups
+*.bin
+# reverse-engineering workspace (vendor JS bundle, third-party clones)
+re/

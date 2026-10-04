@@ -1,0 +1,2 @@
+# MCHOSE G87 (2.4G dongle and wired): allow the logged-in user to access hidraw
+KERNEL=="hidraw*", ATTRS{idVendor}=="41e4", ATTRS{idProduct}=="2001", TAG+="uaccess"

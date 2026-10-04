@@ -1,0 +1,12 @@
+Package: mchose-ctl
+Version: @VERSION@
+Architecture: all
+Maintainer: Hoan <ngviethoan@gmail.com>
+Installed-Size: @SIZE@
+Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, udev
+Section: utils
+Priority: optional
+Description: Lighting and battery control for the MCHOSE G87 keyboard
+ Controls RGB lighting effects, brightness, speed and color of the
+ MCHOSE G87 over its 2.4G receiver, and shows the battery level in the
+ system tray. Includes a GTK settings window and the `mchose` CLI.

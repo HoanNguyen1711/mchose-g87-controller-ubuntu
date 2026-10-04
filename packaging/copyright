@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mchose-ctl
+
+Files: *
+Copyright: 2026 Hoan <ngviethoan@gmail.com>
+License: none
+ No license has been chosen yet.
