@@ -6,6 +6,7 @@ without the official M HUB web driver.
 - GTK settings window: effect, brightness, speed, color, palette cycling
 - System tray indicator with battery percentage, quick effect switching and a low-battery notification
 - `mchose` command-line tool
+- English and Vietnamese interface
 - Talks to the keyboard directly over HID: no cloud, no browser, no root
 
 Currently supported: MCHOSE G87 connected through its **2.4 GHz receiver** (USB ID `41e4:2001`).
@@ -27,7 +28,7 @@ Build and install the Debian package:
 
 ```sh
 packaging/build-deb.sh                              # -> dist/mchose-ctl_<version>_all.deb
-sudo apt install ./dist/mchose-ctl_0.1.0_all.deb
+sudo apt install ./dist/mchose-ctl_0.2.0_all.deb
 ```
 
 The package installs:
@@ -68,6 +69,12 @@ mchose restore [prefix]
 
 Brightness and speed range from 0 to 4.
 
+### Language
+
+The interface is available in English and Vietnamese. By default it follows the system locale.
+You can switch it from the drop-down in the settings window; the choice is saved in
+`~/.config/mchose/config.json`. To override it for one run, use `mchose --lang en` or `mchose --lang vi`.
+
 Effects: `static`, `breathing`, `rainbow`, `reactive`, `rain`, `ripple`, `stars`, `stream`, `flow`,
 `shadow`, `sine`, `pinwheel`, `waterfall`, `flowers`, `off`.
 
@@ -100,9 +107,14 @@ The tool always reads, modifies and writes whole blocks, so bytes it doesn't und
 mchose/device.py     protocol and high-level API (Keyboard, effects)
 mchose/cli.py        command-line interface
 mchose/gui.py        GTK 3 window and Ayatana tray indicator
+mchose/i18n.py       UI strings (English, Vietnamese) and language setting
 data/                udev rule, .desktop file
 packaging/           Debian package build script and metadata
 ```
+
+## License
+
+[MIT](LICENSE)
 
 ## Disclaimer
 

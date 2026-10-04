@@ -1,7 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=MCHOSE G87
-Comment=Chỉnh đèn và xem pin bàn phím MCHOSE
+Comment=Control lighting and check the battery of the MCHOSE keyboard
+Comment[vi]=Chỉnh đèn và xem pin bàn phím MCHOSE
 Exec=mchose gui
 Icon=input-keyboard
 Terminal=false

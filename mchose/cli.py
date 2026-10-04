@@ -1,13 +1,14 @@
 import argparse
 import sys
 
+from . import i18n
 from .device import (EFFECT_BY_NAME, EFFECTS, LEVEL_MAX, PALETTE_SIZE, DeviceNotFound,
                      Keyboard, parse_color)
 
 
 def print_light(state):
     e = state.effect
-    print(f"effect:     {e.name} ({e.label})")
+    print(f"effect:     {e.name} ({i18n.effect_label(e)})")
     if e.brightness:
         print(f"brightness: {state.brightness}/{LEVEL_MAX}")
     if e.speed:
@@ -33,6 +34,8 @@ def color(s):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="mchose", description="MCHOSE G87 control for Linux")
+    ap.add_argument("--lang", choices=list(i18n.LANGUAGES),
+                    help="interface language (default: saved setting, then system locale)")
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("gui", help="open the settings window (default)").add_argument(
         "--hidden", action="store_true", help="start in the tray only")
@@ -50,6 +53,7 @@ def main(argv=None):
         p = sub.add_parser(name, help=f"{name} lighting config to/from PREFIX-*.bin")
         p.add_argument("prefix", nargs="?", default="backup")
     args = ap.parse_args(argv)
+    i18n.init(args.lang)
 
     if args.cmd in (None, "gui"):
         from .gui import run
@@ -67,7 +71,7 @@ def main(argv=None):
                 for e in EFFECTS:
                     opts = [n for n, ok in (("brightness", e.brightness), ("speed", e.speed),
                                             ("color", e.color)) if ok]
-                    print(f"{e.name:10} {e.label:15} {', '.join(opts)}")
+                    print(f"{e.name:10} {i18n.effect_label(e):15} {', '.join(opts)}")
             elif args.cmd == "set":
                 multi = None if args.palette is None else (PALETTE_SIZE if args.palette else 0)
                 print_light(kb.set_light(EFFECT_BY_NAME[args.effect], args.brightness,

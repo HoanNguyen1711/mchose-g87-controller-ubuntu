@@ -11,8 +11,10 @@ gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import AyatanaAppIndicator3 as AppIndicator  # noqa: E402
 from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 
+from . import i18n  # noqa: E402
 from .device import (EFFECT_BY_NAME, EFFECTS, LEVEL_MAX, PALETTE_SIZE,  # noqa: E402
                      DeviceNotFound, Keyboard)
+from .i18n import effect_label, t  # noqa: E402
 
 APP_ID = "io.github.mchose_ctl"
 BATTERY_POLL_SECONDS = 120
@@ -104,10 +106,16 @@ class SettingsWindow(Gtk.ApplicationWindow):
         title = Gtk.Label(label="MCHOSE G87", xalign=0)
         title.get_style_context().add_class("title")
         header.pack_start(title, False, False, 0)
-        self.battery_label = Gtk.Label(label="Pin: —")
+        self.battery_label = Gtk.Label(label=t("battery_unknown"))
         self.battery_bar = Gtk.LevelBar(min_value=0, max_value=100)
         self.battery_bar.set_size_request(80, -1)
         self.battery_bar.set_valign(Gtk.Align.CENTER)
+        self.language = Gtk.ComboBoxText(tooltip_text=t("language"), valign=Gtk.Align.CENTER)
+        for code, name in i18n.LANGUAGES.items():
+            self.language.append(code, name)
+        self.language.set_active_id(i18n.current())
+        self.language.connect("changed", lambda c: app.change_language(c.get_active_id()))
+        header.pack_end(self.language, False, False, 0)
         header.pack_end(self.battery_label, False, False, 0)
         header.pack_end(self.battery_bar, False, False, 0)
         root.pack_start(header, False, False, 0)
@@ -115,7 +123,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         root.pack_start(self.controls, False, False, 0)
 
-        self.controls.pack_start(self._section("Hiệu ứng"), False, False, 0)
+        self.controls.pack_start(self._section(t("effects")), False, False, 0)
         grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True,
                            min_children_per_line=5, max_children_per_line=5,
                            column_spacing=6, row_spacing=6)
@@ -123,7 +131,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.effect_buttons = {}
         group = None
         for e in EFFECTS:
-            b = Gtk.RadioButton.new_with_label_from_widget(group, e.label)
+            b = Gtk.RadioButton.new_with_label_from_widget(group, effect_label(e))
             b.set_mode(False)  # look like a toggle button
             b.connect("toggled", self.on_effect_toggled, e)
             group = group or b
@@ -136,14 +144,14 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.speed = level_scale()
         self.brightness.connect("value-changed", self.on_setting_changed)
         self.speed.connect("value-changed", self.on_setting_changed)
-        self.brightness_label = Gtk.Label(label="Độ sáng", xalign=0)
-        self.speed_label = Gtk.Label(label="Tốc độ", xalign=0)
+        self.brightness_label = Gtk.Label(label=t("brightness"), xalign=0)
+        self.speed_label = Gtk.Label(label=t("speed"), xalign=0)
         form.attach(self.brightness_label, 0, 0, 1, 1)
         form.attach(self.brightness, 1, 0, 1, 1)
         form.attach(self.speed_label, 0, 1, 1, 1)
         form.attach(self.speed, 1, 1, 1, 1)
 
-        self.color_label = Gtk.Label(label="Màu", xalign=0)
+        self.color_label = Gtk.Label(label=t("color"), xalign=0)
         self.color_box = Gtk.Box(spacing=6)
         self.color_button = Gtk.ColorButton()
         self.color_button.connect("color-set", self.on_color_picked)
@@ -157,7 +165,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         form.attach(self.color_label, 0, 2, 1, 1)
         form.attach(self.color_box, 1, 2, 1, 1)
 
-        self.palette_label = Gtk.Label(label="Xoay vòng 7 màu", xalign=0)
+        self.palette_label = Gtk.Label(label=t("palette"), xalign=0)
         self.palette = Gtk.Switch(halign=Gtk.Align.START)
         self.palette.connect("notify::active", self.on_setting_changed)
         form.attach(self.palette_label, 0, 3, 1, 1)
@@ -209,15 +217,15 @@ class SettingsWindow(Gtk.ApplicationWindow):
 
     def show_error(self, err):
         self.controls.set_sensitive(not isinstance(err, DeviceNotFound))
-        self.status.set_text(f"Lỗi: {err}")
+        self.status.set_text(t("error", err=err))
 
     def show_battery(self, battery):
         if battery is None:
-            self.battery_label.set_text("Pin: —")
+            self.battery_label.set_text(t("battery_unknown"))
             self.battery_bar.set_value(0)
         else:
             charging = " ⚡" if battery.charging else ""
-            self.battery_label.set_text(f"Pin: {battery.level}%{charging}")
+            self.battery_label.set_text(t("battery", level=battery.level) + charging)
             self.battery_bar.set_value(battery.level)
 
     # --- UI -> device ----------------------------------------------------
@@ -225,7 +233,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
     def on_effect_toggled(self, button, effect):
         if self.updating or not button.get_active():
             return
-        self.status.set_text("Đang áp dụng…")
+        self.status.set_text(t("applying"))
         self.app.set_effect(effect)
 
     def on_setting_changed(self, *_):
@@ -258,7 +266,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
             kwargs["multicolor"] = PALETTE_SIZE if self.palette.get_active() else 0
             if self.color_dirty:
                 kwargs["color"] = rgba_to_rgb(self.color_button.get_rgba())
-        self.status.set_text("Đang áp dụng…")
+        self.status.set_text(t("applying"))
         self.app.worker.submit(lambda kb: kb.set_light(e, **kwargs),
                                self.app.on_light_changed, self.show_error)
         return False
@@ -271,6 +279,7 @@ class App(Gtk.Application):
         self.window = None
         self.worker = Worker()
         self.low_battery_warned = False
+        self.battery = None
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -295,36 +304,53 @@ class App(Gtk.Application):
         self.window.present()
         self.window.refresh()
 
+    def change_language(self, lang):
+        if lang == i18n.current():
+            return
+        i18n.set_language(lang)
+        # rebuild every widget with the new strings
+        old = self.window
+        if old.apply_source:
+            GLib.source_remove(old.apply_source)
+            old.apply()
+        self.window = SettingsWindow(self)
+        old.destroy()
+        self._build_menu()
+        self.show_battery(self.battery)
+        self.show_window()
+
     def _build_tray(self):
         self.indicator = AppIndicator.Indicator.new(
             APP_ID, "input-keyboard-symbolic", AppIndicator.IndicatorCategory.HARDWARE)
         self.indicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         self.indicator.set_title("MCHOSE G87")
+        self._build_menu()
 
+    def _build_menu(self):
         menu = Gtk.Menu()
-        self.battery_item = Gtk.MenuItem(label="Pin: —", sensitive=False)
+        self.battery_item = Gtk.MenuItem(label=t("battery_unknown"), sensitive=False)
         menu.append(self.battery_item)
         menu.append(Gtk.SeparatorMenuItem())
-        open_item = Gtk.MenuItem(label="Mở cài đặt")
+        open_item = Gtk.MenuItem(label=t("open_settings"))
         open_item.connect("activate", self.show_window)
         menu.append(open_item)
 
-        effects_item = Gtk.MenuItem(label="Hiệu ứng")
+        effects_item = Gtk.MenuItem(label=t("effects"))
         effects_menu = Gtk.Menu()
         for e in EFFECTS:
             if e.name == "off":
                 continue
-            item = Gtk.MenuItem(label=e.label)
+            item = Gtk.MenuItem(label=effect_label(e))
             item.connect("activate", lambda _i, e=e: self.set_effect(e))
             effects_menu.append(item)
         effects_item.set_submenu(effects_menu)
         menu.append(effects_item)
 
-        off_item = Gtk.MenuItem(label="Tắt đèn")
+        off_item = Gtk.MenuItem(label=t("effect.off"))
         off_item.connect("activate", lambda _i: self.set_effect(EFFECT_BY_NAME["off"]))
         menu.append(off_item)
         menu.append(Gtk.SeparatorMenuItem())
-        quit_item = Gtk.MenuItem(label="Thoát")
+        quit_item = Gtk.MenuItem(label=t("quit"))
         quit_item.connect("activate", lambda _i: self.quit())
         menu.append(quit_item)
         menu.show_all()
@@ -338,7 +364,7 @@ class App(Gtk.Application):
 
     def on_light_changed(self, state):
         self.window.show_state(state)
-        self.window.status.set_text("Đã áp dụng")
+        self.window.status.set_text(t("applied"))
 
     def poll_battery(self):
         self.worker.submit(lambda kb: kb.battery(), self.show_battery,
@@ -346,18 +372,19 @@ class App(Gtk.Application):
         return True
 
     def show_battery(self, battery):
+        self.battery = battery
         self.window.show_battery(battery)
         if battery is None:
             self.indicator.set_label("", "100%")
-            self.battery_item.set_label("Pin: không kết nối được")
+            self.battery_item.set_label(t("battery_unavailable"))
             return
-        charging = " (đang sạc)" if battery.charging else ""
+        charging = t("charging") if battery.charging else ""
         self.indicator.set_label(f"{battery.level}%", "100%")
-        self.battery_item.set_label(f"Pin: {battery.level}%{charging}")
+        self.battery_item.set_label(t("battery", level=battery.level) + charging)
         if battery.level <= LOW_BATTERY and not battery.charging:
             if not self.low_battery_warned:
-                n = Gio.Notification.new("Bàn phím MCHOSE sắp hết pin")
-                n.set_body(f"Còn {battery.level}%, hãy cắm sạc.")
+                n = Gio.Notification.new(t("low_battery_title"))
+                n.set_body(t("low_battery_body", level=battery.level))
                 self.send_notification("low-battery", n)
                 self.low_battery_warned = True
         else:

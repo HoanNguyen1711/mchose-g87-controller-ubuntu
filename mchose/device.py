@@ -33,7 +33,6 @@ PALETTE_SIZE = 7  # multicolor value that cycles the whole 7-color palette
 class Effect:
     mode: int
     name: str
-    label: str
     perf_offset: int | None  # (brightness, speed<<4 | multicolor) pair
     brightness: bool
     speed: bool
@@ -42,21 +41,21 @@ class Effect:
 
 # Mode numbers, offsets and capability flags as used by M HUB for the G87.
 EFFECTS = [
-    Effect(1, "static", "Tĩnh", 58, True, False, True),
-    Effect(2, "breathing", "Thở", 60, True, True, True),
-    Effect(3, "rainbow", "Cầu vồng", 62, True, True, False),
-    Effect(4, "reactive", "Phản hồi phím", 64, True, True, True),
-    Effect(5, "rain", "Mưa rơi", 66, True, True, True),
-    Effect(7, "ripple", "Gợn sóng", 70, True, True, True),
-    Effect(8, "stars", "Sao trời", 72, True, True, True),
-    Effect(10, "stream", "Dòng chảy", 76, True, True, True),
-    Effect(11, "flow", "Trôi theo sóng", 78, True, True, True),
-    Effect(12, "shadow", "Bóng đuổi", 80, True, True, True),
-    Effect(13, "sine", "Sóng sin", 82, True, True, True),
-    Effect(15, "pinwheel", "Chong chóng", 84, False, False, False),
-    Effect(16, "waterfall", "Thác bảy màu", 88, True, True, False),
-    Effect(17, "flowers", "Hoa nở", 90, False, False, False),
-    Effect(0, "off", "Tắt đèn", None, False, False, False),
+    Effect(1, "static", 58, True, False, True),
+    Effect(2, "breathing", 60, True, True, True),
+    Effect(3, "rainbow", 62, True, True, False),
+    Effect(4, "reactive", 64, True, True, True),
+    Effect(5, "rain", 66, True, True, True),
+    Effect(7, "ripple", 70, True, True, True),
+    Effect(8, "stars", 72, True, True, True),
+    Effect(10, "stream", 76, True, True, True),
+    Effect(11, "flow", 78, True, True, True),
+    Effect(12, "shadow", 80, True, True, True),
+    Effect(13, "sine", 82, True, True, True),
+    Effect(15, "pinwheel", 84, False, False, False),
+    Effect(16, "waterfall", 88, True, True, False),
+    Effect(17, "flowers", 90, False, False, False),
+    Effect(0, "off", None, False, False, False),
 ]
 EFFECT_BY_MODE = {e.mode: e for e in EFFECTS}
 EFFECT_BY_NAME = {e.name: e for e in EFFECTS}
@@ -204,7 +203,7 @@ class Keyboard:
         effect = EFFECT_BY_MODE.get(perf[OFF_LIGHT_MODE])
         if effect is None:
             effect = Effect(perf[OFF_LIGHT_MODE], f"mode{perf[OFF_LIGHT_MODE]}",
-                            f"Chế độ {perf[OFF_LIGHT_MODE]}", None, False, False, False)
+                            None, False, False, False)
         state = LightState(effect)
         if effect.perf_offset is not None:
             o = effect.perf_offset
