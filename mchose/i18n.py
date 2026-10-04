@@ -128,5 +128,10 @@ def t(key, **kwargs):
     return text.format(**kwargs) if kwargs else text
 
 
-def effect_label(effect):
-    return STRINGS[_lang].get(f"effect.{effect.name}", effect.name)
+def effect_label(effect, lang=None):
+    return STRINGS[lang or _lang].get(f"effect.{effect.name}", effect.name)
+
+
+def all_texts():
+    """Every UI string in every language, for sizing and font-coverage checks."""
+    return [text for strings in STRINGS.values() for text in strings.values()]

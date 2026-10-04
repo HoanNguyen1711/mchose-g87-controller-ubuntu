@@ -9,7 +9,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import AyatanaAppIndicator3 as AppIndicator  # noqa: E402
-from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from . import i18n  # noqa: E402
 from .device import (EFFECT_BY_NAME, EFFECTS, LEVEL_MAX, PALETTE_SIZE,  # noqa: E402
@@ -72,6 +72,35 @@ def rgb_to_rgba(rgb):
     rgba = Gdk.RGBA()
     rgba.parse("#%02x%02x%02x" % rgb)
     return rgba
+
+
+# Fonts tried, in order, when the desktop font can't draw every UI character
+# (e.g. Ubuntu Sans lacks the Vietnamese hook-above letters).
+FALLBACK_FONTS = ["Noto Sans", "DejaVu Sans", "Liberation Sans"]
+
+
+def font_covers(family, text):
+    """True if Pango draws all of `text` with `family`, without falling back."""
+    layout = Gtk.Label().create_pango_layout(text)
+    layout.set_font_description(Pango.FontDescription.from_string(family))
+    it = layout.get_iter()
+    while True:
+        run = it.get_run()
+        if run and run.item.analysis.font.describe().get_family() != family:
+            return False
+        if not it.next_run():
+            return True
+
+
+def ui_font():
+    """A font family that covers every UI string in every language, or None if the
+    desktop font already does. Using one font for all languages keeps the window
+    from changing when the language is switched."""
+    text = "".join(i18n.all_texts())
+    desktop = Pango.FontDescription.from_string(Gtk.Settings.get_default().props.gtk_font_name)
+    if font_covers(desktop.get_family(), text):
+        return None
+    return next((f for f in FALLBACK_FONTS if font_covers(f, text)), None)
 
 
 def level_scale():
@@ -177,6 +206,19 @@ class SettingsWindow(Gtk.ApplicationWindow):
         root.pack_start(self.status, False, False, 0)
 
         root.show_all()
+        self._fix_effect_width()
+
+    def _fix_effect_width(self):
+        """Size effect buttons for the longest label in any language, so switching
+        language doesn't resize the window."""
+        widest = 0
+        for e in EFFECTS:
+            label = self.effect_buttons[e.mode].get_child()
+            for lang in i18n.LANGUAGES:
+                layout = label.create_pango_layout(effect_label(e, lang))
+                widest = max(widest, layout.get_pixel_size()[0])
+        for b in self.effect_buttons.values():
+            b.get_child().set_size_request(widest, -1)
 
     @staticmethod
     def _section(text):
@@ -284,7 +326,10 @@ class App(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
         provider = Gtk.CssProvider()
-        provider.load_from_data(CSS)
+        css = CSS
+        if font := ui_font():
+            css += b'window { font-family: "%s"; }' % font.encode()
+        provider.load_from_data(css)
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self.window = SettingsWindow(self)
