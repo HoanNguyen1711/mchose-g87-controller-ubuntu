@@ -232,7 +232,8 @@ class SettingsWindow(Gtk.ApplicationWindow):
         if stale_only and time.monotonic() - self.last_refresh < 3:
             return
         self.last_refresh = time.monotonic()
-        self.app.worker.submit(lambda kb: kb.light(), self.show_state, self.show_error)
+        # callbacks go through the app: this window may be replaced before they run
+        self.app.worker.submit(lambda kb: kb.light(), self.app.on_state, self.app.on_error)
 
     def show_state(self, state):
         self.updating = True
@@ -310,7 +311,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
                 kwargs["color"] = rgba_to_rgb(self.color_button.get_rgba())
         self.status.set_text(t("applying"))
         self.app.worker.submit(lambda kb: kb.set_light(e, **kwargs),
-                               self.app.on_light_changed, self.show_error)
+                               self.app.on_light_changed, self.app.on_error)
         return False
 
 
@@ -405,7 +406,13 @@ class App(Gtk.Application):
 
     def set_effect(self, effect):
         self.worker.submit(lambda kb: kb.set_light(effect), self.on_light_changed,
-                           self.window.show_error)
+                           self.on_error)
+
+    def on_state(self, state):
+        self.window.show_state(state)
+
+    def on_error(self, err):
+        self.window.show_error(err)
 
     def on_light_changed(self, state):
         self.window.show_state(state)

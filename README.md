@@ -28,7 +28,7 @@ Build and install the Debian package:
 
 ```sh
 packaging/build-deb.sh                              # -> dist/mchose-ctl_<version>_all.deb
-sudo apt install ./dist/mchose-ctl_0.2.1_all.deb
+sudo apt install ./dist/mchose-ctl_0.2.2_all.deb
 ```
 
 The package installs:
