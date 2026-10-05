@@ -194,8 +194,10 @@ class Keyboard:
 
     # --- high level ------------------------------------------------------
 
-    def battery(self):
-        data = self.read_block(CMD_GET_BATTERY)
+    def battery(self, quick=False):
+        """`quick` gives up sooner: a sleeping keyboard doesn't answer at all."""
+        opts = {"attempts": 2, "first_timeout": 1.0} if quick else {}
+        data = self.read_block(CMD_GET_BATTERY, **opts)
         return Battery(level=data[0], charging=bool(data[1] >> 4))
 
     def light(self):

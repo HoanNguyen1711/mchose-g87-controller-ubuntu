@@ -18,6 +18,11 @@ from .i18n import effect_label, t  # noqa: E402
 
 APP_ID = "io.github.mchose_ctl"
 BATTERY_POLL_SECONDS = 120
+# while the keyboard sleeps it doesn't answer; probe often to notice it waking up
+ASLEEP_POLL_SECONDS = 3
+MISSING_POLL_SECONDS = 10
+# the 2.4G link drops ~5% of probes even when awake: only a streak means asleep
+ASLEEP_AFTER_FAILURES = 2
 LOW_BATTERY = 15
 APPLY_DELAY_MS = 300
 PRESETS = ["#ff0000", "#ff8000", "#ffff00", "#00ff00", "#00ffff", "#0040ff", "#ff00ff", "#ffffff"]
@@ -37,25 +42,25 @@ class Worker:
         self.jobs = queue.Queue()
         threading.Thread(target=self._loop, daemon=True).start()
 
-    def submit(self, fn, done=None, error=None):
-        self.jobs.put((fn, done, error))
+    def submit(self, fn, done=None, error=None, retry=True):
+        self.jobs.put((fn, done, error, retry))
 
     @staticmethod
-    def _run(fn):
+    def _run(fn, retry):
         # jobs are idempotent read-modify-writes, so a radio hiccup is safe to retry
-        for attempt in range(2):
+        for attempt in range(2 if retry else 1):
             try:
                 with Keyboard() as kb:
                     return fn(kb)
             except TimeoutError:
-                if attempt:
+                if attempt or not retry:
                     raise
 
     def _loop(self):
         while True:
-            fn, done, error = self.jobs.get()
+            fn, done, error, retry = self.jobs.get()
             try:
-                result = self._run(fn)
+                result = self._run(fn, retry)
             except (DeviceNotFound, TimeoutError, OSError, ValueError) as e:
                 if error:
                     GLib.idle_add(error, e)
@@ -231,6 +236,10 @@ class SettingsWindow(Gtk.ApplicationWindow):
     def refresh(self, stale_only=False):
         if stale_only and time.monotonic() - self.last_refresh < 3:
             return
+        if self.app.link == "asleep":
+            # a full read would just time out; the battery probe refreshes us on wake
+            self.status.set_text(t("asleep_hint"))
+            return
         self.last_refresh = time.monotonic()
         # callbacks go through the app: this window may be replaced before they run
         self.app.worker.submit(lambda kb: kb.light(), self.app.on_state, self.app.on_error)
@@ -260,16 +269,16 @@ class SettingsWindow(Gtk.ApplicationWindow):
 
     def show_error(self, err):
         self.controls.set_sensitive(not isinstance(err, DeviceNotFound))
-        self.status.set_text(t("error", err=err))
-
-    def show_battery(self, battery):
-        if battery is None:
-            self.battery_label.set_text(t("battery_unknown"))
-            self.battery_bar.set_value(0)
+        if isinstance(err, DeviceNotFound):
+            self.status.set_text(t("receiver_missing"))
+        elif isinstance(err, TimeoutError):
+            self.status.set_text(t("asleep_hint"))
         else:
-            charging = " ⚡" if battery.charging else ""
-            self.battery_label.set_text(t("battery", level=battery.level) + charging)
-            self.battery_bar.set_value(battery.level)
+            self.status.set_text(t("error", err=err))
+
+    def show_battery(self, text, level):
+        self.battery_label.set_text(text)
+        self.battery_bar.set_value(level or 0)
 
     # --- UI -> device ----------------------------------------------------
 
@@ -322,7 +331,10 @@ class App(Gtk.Application):
         self.window = None
         self.worker = Worker()
         self.low_battery_warned = False
-        self.battery = None
+        self.battery = None  # last reading, kept while the keyboard sleeps
+        self.link = "unknown"  # "ok", "asleep" or "missing"
+        self.poll_source = None
+        self.probe_failures = 0
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -338,7 +350,6 @@ class App(Gtk.Application):
         self._build_tray()
         self.hold()  # keep running in the tray when the window is closed
         self.poll_battery()
-        GLib.timeout_add_seconds(BATTERY_POLL_SECONDS, self.poll_battery)
 
     def do_activate(self):
         if self.start_hidden:
@@ -362,7 +373,7 @@ class App(Gtk.Application):
         self.window = SettingsWindow(self)
         old.destroy()
         self._build_menu()
-        self.show_battery(self.battery)
+        self.show_battery()
         self.show_window()
 
     def _build_tray(self):
@@ -410,29 +421,83 @@ class App(Gtk.Application):
 
     def on_state(self, state):
         self.window.show_state(state)
+        self._keyboard_answered()
 
     def on_error(self, err):
         self.window.show_error(err)
+        if isinstance(err, DeviceNotFound):
+            self._set_link("missing")
+        elif isinstance(err, TimeoutError):
+            self.poll_battery()  # let the probe decide whether it's asleep
 
     def on_light_changed(self, state):
         self.window.show_state(state)
         self.window.status.set_text(t("applied"))
+        self._keyboard_answered()
+
+    def _keyboard_answered(self):
+        # any successful job proves the keyboard is awake: refresh the battery now
+        if self.link != "ok":
+            self.poll_battery()
+
+    # --- battery -----------------------------------------------------------
 
     def poll_battery(self):
-        self.worker.submit(lambda kb: kb.battery(), self.show_battery,
-                           lambda _e: self.show_battery(None))
-        return True
+        if self.poll_source:
+            GLib.source_remove(self.poll_source)
+        self.poll_source = None
+        self.worker.submit(lambda kb: kb.battery(quick=True), self._battery_read,
+                           self.on_battery_error, retry=False)
+        return False
 
-    def show_battery(self, battery):
+    def _battery_read(self, battery):
         self.battery = battery
-        self.window.show_battery(battery)
-        if battery is None:
-            self.indicator.set_label("", "100%")
-            self.battery_item.set_label(t("battery_unavailable"))
+        self.probe_failures = 0
+        self._set_link("ok")
+
+    def on_battery_error(self, err):
+        if isinstance(err, DeviceNotFound):
+            self._set_link("missing")
             return
-        charging = t("charging") if battery.charging else ""
-        self.indicator.set_label(f"{battery.level}%", "100%")
-        self.battery_item.set_label(t("battery", level=battery.level) + charging)
+        self.probe_failures += 1
+        if self.probe_failures >= ASLEEP_AFTER_FAILURES:
+            self._set_link("asleep")
+        else:  # probably a dropped packet: keep showing the last state, retry soon
+            self._schedule_poll(ASLEEP_POLL_SECONDS)
+
+    def _set_link(self, link):
+        woke = link == "ok" and self.link != "ok"
+        self.link = link
+        self.show_battery()
+        if woke and self.window.get_visible():
+            self.window.refresh()
+        self._schedule_poll({"ok": BATTERY_POLL_SECONDS, "asleep": ASLEEP_POLL_SECONDS}.get(
+            link, MISSING_POLL_SECONDS))
+
+    def _schedule_poll(self, seconds):
+        if self.poll_source:
+            GLib.source_remove(self.poll_source)
+        self.poll_source = GLib.timeout_add_seconds(seconds, self.poll_battery)
+
+    def show_battery(self):
+        battery, link = self.battery, self.link
+        if link == "missing":
+            text, tray, level = t("receiver_missing"), "", None
+        elif battery is None:
+            text = t("keyboard_asleep") if link == "asleep" else t("battery_unknown")
+            tray, level = "", None
+        else:
+            level = battery.level
+            tray = f"{level}%"
+            if link == "asleep":
+                text = t("battery_asleep", level=level)
+            else:
+                text = t("battery", level=level) + (t("charging") if battery.charging else "")
+        self.window.show_battery(text, level)
+        self.battery_item.set_label(text)
+        self.indicator.set_label(tray, "100%")
+        if battery is None or link != "ok":
+            return
         if battery.level <= LOW_BATTERY and not battery.charging:
             if not self.low_battery_warned:
                 n = Gio.Notification.new(t("low_battery_title"))
